@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createWorld } from './world.js';
+import { WALK } from '../../shared/campus-layout.js';
 import './style.css';
 
 const $=id=>document.getElementById(id), canvas=$('world');
@@ -118,7 +119,7 @@ for(const b of document.querySelectorAll('[data-move]')){
 
 function applyQuality(){if(!renderer)return;renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:1));renderer.setSize(innerWidth,innerHeight);sun.shadow.mapSize.setScalar(quality==='high'?2048:1024);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}renderer.shadowMap.needsUpdate=true;}
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();if(renderer)renderer.setSize(innerWidth,innerHeight);if(mode==='welcome')overview();syncUI();});
-function canMove(x,z){const b=world.bounds;return x>b.minX+.4&&x<b.maxX-.4&&z>b.minZ+.4&&z<b.maxZ-.4&&!world.colliders.some(c=>x>c.minX-.34&&x<c.maxX+.34&&z>c.minZ-.34&&z<c.maxZ+.34);}
+function canMove(x,z){const b=world.bounds,r=WALK.radius,pad=WALK.boundsPad;return x>b.minX+pad&&x<b.maxX-pad&&z>b.minZ+pad&&z<b.maxZ-pad&&!world.colliders.some(c=>x>c.minX-r&&x<c.maxX+r&&z>c.minZ-r&&z<c.maxZ+r);}
 function walk(dt){
   const forward=Number(keys.has('w')||keys.has('arrowup')||touchMove.has('forward'))-Number(keys.has('s')||keys.has('arrowdown')||touchMove.has('back'));
   const side=Number(keys.has('d')||keys.has('arrowright')||touchMove.has('right'))-Number(keys.has('a')||keys.has('arrowleft')||touchMove.has('left'));

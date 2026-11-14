@@ -2,7 +2,7 @@
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const wrap=n=>Math.atan2(Math.sin(n),Math.cos(n));
-import {CAMPUS} from '../../shared/campus-layout.js';
+import {CAMPUS,WALK} from '../../shared/campus-layout.js';
 const SPAWNS=CAMPUS.zombieSpawns;
 
 export class Navigation {
@@ -12,7 +12,7 @@ export class Navigation {
     this.walkable=new Uint8Array(this.width*this.height);
     for(let i=0;i<this.walkable.length;i++){const p=this.point(i);this.walkable[i]=!this.blocked(p.x,p.z);}
   }
-  blocked(x,z){const b=this.world.bounds;return x<b.minX+.4||x>b.maxX-.4||z<b.minZ+.4||z>b.maxZ-.4||this.world.colliders.some(c=>x>c.minX-.34&&x<c.maxX+.34&&z>c.minZ-.34&&z<c.maxZ+.34);}
+  blocked(x,z){const b=this.world.bounds,r=WALK.radius,pad=WALK.boundsPad;return x<b.minX+pad||x>b.maxX-pad||z<b.minZ+pad||z>b.maxZ-pad||this.world.colliders.some(c=>x>c.minX-r&&x<c.maxX+r&&z>c.minZ-r&&z<c.maxZ+r);}
   point(i){return {x:this.x0+i%this.width,z:this.z0+Math.floor(i/this.width)};}
   index(p){return clamp(Math.round(p.z-this.z0),0,this.height-1)*this.width+clamp(Math.round(p.x-this.x0),0,this.width-1);}
   clear(a,b){const d=dist(a,b),n=Math.ceil(d/.3);for(let i=1;i<=n;i++)if(this.blocked(a.x+(b.x-a.x)*i/n,a.z+(b.z-a.z)*i/n))return false;return true;}

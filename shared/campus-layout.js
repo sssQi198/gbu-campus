@@ -1,7 +1,11 @@
 // Relative placement transcribed from IMG_5355 and the IMG_5354 model walkaround.
 // Front of the model is +Z; these are gameplay units, not surveyed metres or north.
+// Movement tests expand authored colliders by radius. boundsPad is the campus air-wall inset.
+export const WALK = {radius:.4, boundsPad:.4};
 export const CAMPUS = {
-  bounds: {minX:-145,maxX:145,minZ:-58,maxZ:63},
+  // Visible lawn is 316 x 145. The air wall sits 1 unit inside that edge so the
+  // camera stops on grass instead of in empty space, without opening the void.
+  bounds: {minX:-157,maxX:157,minZ:-71.5,maxZ:71.5},
   spawn: {x:38,z:51,yaw:0}, exit: {x:38,z:57},
   buildings: [
     {id:'towers',label:'Balcony towers',x:-122,z:-29,w:19,d:21,h:48},
