@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CAMPUS } from './campus-layout.js';
+import { CAMPUS, WALK } from './campus-layout.js';
 
 // Model-relative reconstruction. Geometry is purposefully independent of collision.
 // IMG_5355 / IMG_5354 set adjacency; the photograph set sets the facade vocabulary.
@@ -82,7 +82,17 @@ export function build(scene, renderer, {night = false, onProgress = () => {}} = 
   function strip(a,b,width,mat,y=.018) {const dx=b[0]-a[0],dz=b[1]-a[1];box((a[0]+b[0])/2,y,(a[1]+b[1])/2,width,.025,Math.hypot(dx,dz),mat,Math.atan2(dx,dz));}
   function curve(points,r,mat) {mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),Math.max(16,points.length*3),r,5,false),mat);}
   function ellipse(x,z,rx,rz,mat,y=.01) {mesh(new THREE.CircleGeometry(1,80),mat,[x,y,z],[-Math.PI/2,0,0],[rx,rz,1]);}
-  function ellipseCollider(x,z,rx,rz,id) {for(let dz=-rz;dz<rz;dz+=1.2){const half=rx*Math.sqrt(Math.max(0,1-Math.pow((dz+.6)/rz,2)));if(half>.1)obstacle(x,z+dz+.6,half*2,1.2,id);}}
+  // Cover the widest part of each strip (the edge nearer the ellipse centre). Using
+  // the centre width left walkable notches around the water and hill perimeters.
+  function ellipseCollider(x,z,rx,rz,id) {
+    const step=1.2;
+    for(let dz=-rz;dz<rz;dz+=step){
+      const z0=dz,z1=Math.min(dz+step,rz);
+      const zWide=(z0<=0&&z1>=0)?0:(Math.abs(z0)<Math.abs(z1)?z0:z1);
+      const half=rx*Math.sqrt(Math.max(0,1-(zWide/rz)**2));
+      if(half>.1)obstacle(x,z+(z0+z1)/2,half*2,z1-z0,id);
+    }
+  }
   function blocked(x,z,r=.6) {return colliders.some(b=>x>b.minX-r&&x<b.maxX+r&&z>b.minZ-r&&z<b.maxZ+r);}
   function segmentDistance(x,z,a,b){const dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz)));return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t);}
   function nearRoute(x,z,r=2.8){return (Math.abs(x-CAMPUS.track.x)<17&&Math.abs(z-CAMPUS.track.z)<16)||CAMPUS.paths.some(p=>p.some((a,i)=>i&&segmentDistance(x,z,p[i-1],a)<r))||CAMPUS.stations.some(s=>Math.hypot(x-s.position.x,z-s.position.z)<r+1)||CAMPUS.safeZones.some(s=>Math.hypot(x-s.x,z-s.z)<s.r+1);}
@@ -121,8 +131,8 @@ export function build(scene, renderer, {night = false, onProgress = () => {}} = 
   box(37,.025,39,31,.035,27,m.pavingLight);
   for(let z=28;z<51;z+=3)box(37,.048,z,30,.012,.035,m.joint);
   for(let x=23;x<53;x+=3)box(x,.049,39,.035,.012,26,m.joint);
-  // Entry monument does not obstruct the central start/exit lane.
-  box(24,.72,51.8,15,1.4,.9,m.porcelain);sign(0,24,.95,52.28,13,.58);
+  // Entry monument does not obstruct the central start/exit lane at x=38.
+  box(24,.72,51.8,15,1.4,.9,m.porcelain);sign(0,24,.95,52.28,13,.58);obstacle(24,51.8,15,.9,'entry-monument');
   for(const x of [27,30.4,33.8]){
     beam([x,0,31],[x,11.5,31],.055,m.whiteTrim,.035,8);box(x,.15,31,.8,.28,.8,m.concrete);
     const g=new THREE.PlaneGeometry(2.3,1.45,12,3),fm=new THREE.MeshStandardMaterial({color:x===30.4?0xd44539:0xe5e4d8,side:THREE.DoubleSide,roughness:.9});
@@ -155,9 +165,22 @@ export function build(scene, renderer, {night = false, onProgress = () => {}} = 
   // Genuine horizontal cladding joints follow the curved crown rather than a cuboid proxy.
   for(let j=0;j<5;j++)arcBand(-.016,1.038,t=>top(t)-j*.66,t=>top(t)-j*.66+.025,m.joint);
   for(let i=0;i<=steps;i+=2){const t=start+(end-start)*i/steps;for(const inner of [true,false]){const p=rp(t,inner),height=top(t)-3.4;box(p[0],height/2,p[2],.07,height,.10,m.darkFrame,-t);}}
-  // Short segment AABBs follow the occupied ring; they do not fill its open courtyard.
-  for(let i=0;i<76;i++){const t=start+(end-start)*(i+.5)/76,pa=rp(t),pb=rp(t,true),x=(pa[0]+pb[0])/2,z=(pa[2]+pb[2])/2;
-    obstacle(x,z,Math.abs(pa[0]-pb[0])+2.5,Math.abs(pa[2]-pb[2])+2.2,'crescent-shell');}
+  // Sampled AABBs of each shell quad, plus a small pad. The previous radial-only
+  // box with +2.5/+2.2 padding blocked empty air around the curve.
+  const crescentPad=.25,crescentSegs=96;
+  for(let i=0;i<crescentSegs;i++){
+    const t0=start+(end-start)*i/crescentSegs,t1=start+(end-start)*(i+1)/crescentSegs;
+    let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    for(let k=0;k<=4;k++){
+      const t=t0+(t1-t0)*k/4;
+      for(const inner of [true,false]){
+        const p=rp(t,inner);
+        minX=Math.min(minX,p[0]);maxX=Math.max(maxX,p[0]);
+        minZ=Math.min(minZ,p[2]);maxZ=Math.max(maxZ,p[2]);
+      }
+    }
+    obstacle((minX+maxX)/2,(minZ+maxZ)/2,(maxX-minX)+crescentPad*2,(maxZ-minZ)+crescentPad*2,'crescent-shell');
+  }
   // Lake is narrow along the front lip; the memory is reached from the front promenade.
   ellipse(-19,3.5,27.4,10.2,m.stone,.015);ellipse(-19,3.5,26.7,9.65,m.water,.07);
   ellipseCollider(-19,3.5,27.1,10,'water');
@@ -222,7 +245,9 @@ export function build(scene, renderer, {night = false, onProgress = () => {}} = 
   obstacle(tx,tz,26,23,'stepped-tower');parapet(tx-2,tz-2.5,16,14,39.4);
   for(const x of [-127,-117]){box(x,40.7,7,3.2,2,3.2,m.darkFrame);box(x,41.8,7,3.5,.2,3.5,m.porcelain);}
   function balconyTower(x,z,w,d,h){
-    box(x,h/2,z,w,h,d,m.glass);obstacle(x,z,w+1.5,d+1.5,'balcony-tower');
+    box(x,h/2,z,w,h,d,m.glass);
+    // Balconies project +Z; keep the back close to the shaft instead of padding every side.
+    obstacle(x,z+.55,w+.4,d+1.7,'balcony-tower');
     for(const side of [-1,1])box(x+side*(w/2-.4),h/2,z,1.15,h+.8,d+.35,m.porcelain);
     for(let y=2.2;y<h;y+=2.30){box(x,y,z+d/2+.65,w,.2,1.8,m.porcelain);box(x,y+.77,z+d/2+1.45,w,.70,.11,m.joint);box(x,y+1.15,z+d/2+1.48,w,.07,.09,m.whiteTrim);for(let dx=-w/2+.6;dx<w/2;dx+=2.6)box(x+dx,y+1.03,z+d/2+1.40,.07,1.75,.1,m.darkFrame);}
     for(let y=2;y<h;y+=2.30)box(x,y,z-d/2-.05,w,.27,.12,m.porcelain);
@@ -371,7 +396,7 @@ export function build(scene, renderer, {night = false, onProgress = () => {}} = 
   const diagnostics={provenance,triangles:Math.round(triangles),staticDrawCalls:batches.size,dynamicDrawCalls:23,materials:batches.size+11,geometries:batches.size+23,colliderCount:colliders.length,sourceMeshes:0,retainedMeshes:0,shadowPasses:0,reflectionPasses:0,routeSamples,routeConflicts,stationConflicts,trackConflicts,landmarks:CAMPUS.buildings.map(b=>b.id),coordinateConvention:'Model front is +Z. Ground y=0. Relative, compressed, not surveyed.'};
   onProgress('Campus ready',1);
   return {root,colliders,bounds:copy(CAMPUS.bounds),stations:copy(CAMPUS.stations),safeZones:copy(CAMPUS.safeZones),spawn:copy(CAMPUS.spawn),exit:copy(CAMPUS.exit),diagnostics,
-    groundHeight(){return 0;},isWalkable(x,z,r=.6){const b=CAMPUS.bounds;return x>b.minX+r&&x<b.maxX-r&&z>b.minZ+r&&z<b.maxZ-r&&!blocked(x,z,r);},
+    groundHeight(){return 0;},isWalkable(x,z,r=WALK.radius){const b=CAMPUS.bounds;return x>b.minX+r&&x<b.maxX-r&&z>b.minZ+r&&z<b.maxZ-r&&!blocked(x,z,r);},
     update(dt,time,state){animatedTime.value=time;for(const item of memories.values()){item.group.position.y=1.65+Math.sin(time*1.6)*.07;item.group.rotation.y=time*.35;item.group.scale.setScalar(item.done?.46:1);item.ring.rotation.z=time*.18;}
       for(const beacon of trackBeacons){const tr=state?.track,complete=tr?.done||tr?.active&&beacon.index<tr.next,next=tr?.active&&beacon.index===tr.next;beacon.group.visible=!night||!!tr?.active||!!tr?.done;beacon.mat.color.set(complete?0xd8ac69:next?0xa2ebff:0x458bab);beacon.mat.opacity=complete?.35:next?.96:.45;beacon.halo.scale.setScalar(next?1+Math.sin(time*3)*.12:1);if(state?.player)beacon.group.rotation.y=Math.atan2(state.player.x-beacon.group.position.x,state.player.z-beacon.group.position.z);}
       for(const {mesh:flag,original} of flags){const p=flag.geometry.attributes.position;for(let i=0;i<p.count;i++){const x=original[i*3],y=original[i*3+1],u=(x+1.15)/2.3;p.setZ(i,Math.sin(u*5-time*1.7+y)*.17*u);}p.needsUpdate=true;flag.geometry.computeVertexNormals();}},

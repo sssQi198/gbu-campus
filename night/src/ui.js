@@ -4,13 +4,20 @@ import { CAMPUS, MEMORY_TITLES } from '../../shared/campus-layout.js';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const clock = value => `${Math.floor((value || 0) / 60).toString().padStart(2, '0')}:${Math.floor((value || 0) % 60).toString().padStart(2, '0')}`;
 const MAP_SCALE = 2;
-const mapPoint = ({x,z}) => ({x:24+(x-CAMPUS.bounds.minX)*MAP_SCALE,y:42+(z-CAMPUS.bounds.minZ)*MAP_SCALE});
+const MAP_PAD = {x:24,y:42,right:24,bottom:28};
+const mapSize = {
+  w: MAP_PAD.x + (CAMPUS.bounds.maxX - CAMPUS.bounds.minX) * MAP_SCALE + MAP_PAD.right,
+  h: MAP_PAD.y + (CAMPUS.bounds.maxZ - CAMPUS.bounds.minZ) * MAP_SCALE + MAP_PAD.bottom,
+};
+const mapPoint = ({x,z}) => ({x:MAP_PAD.x+(x-CAMPUS.bounds.minX)*MAP_SCALE,y:MAP_PAD.y+(z-CAMPUS.bounds.minZ)*MAP_SCALE});
 const memoryOrder = ['library','greenhouse','observatory','residence'];
 
 function drawCampusMap() {
   const svg = document.querySelector('.campus-map');
   const layer = document.getElementById('map-layout');
   const point = (x,z) => {const p=mapPoint({x,z});return `${p.x},${p.y}`;};
+  const grid = svg.querySelector('rect');
+  if (grid) {grid.setAttribute('width', mapSize.w);grid.setAttribute('height', mapSize.h);}
   const footprints = CAMPUS.buildings.map(building => {
     const p=mapPoint(building),w=building.w*MAP_SCALE,d=building.d*MAP_SCALE;
     const shape=building.id==='crescent'
@@ -23,8 +30,8 @@ function drawCampusMap() {
   const safe=CAMPUS.safeZones.map(zone=>{const p=mapPoint(zone);return `<circle cx="${p.x}" cy="${p.y}" r="4"/>`;}).join('');
   const stations=memoryOrder.map((id,index)=>{const station=CAMPUS.stations.find(s=>s.id===id),p=mapPoint(station.position);return `<g data-map-memory="${id}" class="map-building"><title>${station.title}: ${MEMORY_TITLES[id]}</title><circle cx="${p.x}" cy="${p.y}" r="10"/><text x="${p.x}" y="${p.y+3.5}">${index+1}</text></g>`;}).join('');
   const gate=mapPoint(CAMPUS.exit),track=mapPoint(CAMPUS.track),water=mapPoint(CAMPUS.stations.find(s=>s.id==='greenhouse').position);
-  layer.innerHTML=`<g class="map-paths">${paths}</g>${footprints}<ellipse class="map-water" cx="${water.x}" cy="${water.y-7}" rx="24" ry="12"/><rect class="map-track" x="${track.x-CAMPUS.track.w}" y="${track.y-CAMPUS.track.d}" width="${CAMPUS.track.w*2}" height="${CAMPUS.track.d*2}" rx="22"/><g class="map-lanterns">${safe}</g>${stations}<g class="map-gate"><path d="M${gate.x-12},${gate.y-5}v10m24-10v10m-24-5h24"/><text x="${gate.x}" y="${gate.y+22}">PLAZA GATE / EXIT</text></g><text x="315" y="23" class="map-orientation">MODEL REAR</text><text x="145" y="325" class="map-orientation">MODEL FRONT</text>`;
-  svg.setAttribute('viewBox','0 0 630 340');
+  layer.innerHTML=`<g class="map-paths">${paths}</g>${footprints}<ellipse class="map-water" cx="${water.x}" cy="${water.y-7}" rx="24" ry="12"/><rect class="map-track" x="${track.x-CAMPUS.track.w}" y="${track.y-CAMPUS.track.d}" width="${CAMPUS.track.w*2}" height="${CAMPUS.track.d*2}" rx="22"/><g class="map-lanterns">${safe}</g>${stations}<g class="map-gate"><path d="M${gate.x-12},${gate.y-5}v10m24-10v10m-24-5h24"/><text x="${gate.x}" y="${gate.y+22}">PLAZA GATE / EXIT</text></g><text x="${mapSize.w/2}" y="23" class="map-orientation">MODEL REAR</text><text x="${mapSize.w/2}" y="${mapSize.h-15}" class="map-orientation">MODEL FRONT</text>`;
+  svg.setAttribute('viewBox',`0 0 ${mapSize.w} ${mapSize.h}`);
   const list=document.getElementById('map-memory-list');
   list.innerHTML=memoryOrder.map((id,index)=>{const station=CAMPUS.stations.find(s=>s.id===id);return `<li data-map-entry="${id}"><b>${index+1}</b><span>${station.title}<small>${MEMORY_TITLES[id]}</small></span></li>`;}).join('');
 }

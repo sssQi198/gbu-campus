@@ -1,6 +1,6 @@
 // Gameplay uses a bounded 60Hz step. All positions are metres on a flat walkable campus.
 import {ZombieSystem} from './zombies.js';
-import {CAMPUS,MEMORY_TITLES} from '../../shared/campus-layout.js';
+import {CAMPUS,MEMORY_TITLES,WALK} from '../../shared/campus-layout.js';
 export const TITLES = MEMORY_TITLES;
 export const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 export const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
@@ -49,10 +49,10 @@ export class CampusGame {
     this.emit('collect',this.memories.length);this.say(`${TITLES[id]} — remembered. ${4-this.memories.length?`${4-this.memories.length} remain.`:'Return to the plaza gate.'}`,6);
     this.ghost.target={x:this.player.x,z:this.player.z};this.ghost.alert=8;
   }
-  blocked(x,z,r=.34){return this.world.colliders.some(c=>x>c.minX-r&&x<c.maxX+r&&z>c.minZ-r&&z<c.maxZ+r);}
+  blocked(x,z,r=WALK.radius){return this.world.colliders.some(c=>x>c.minX-r&&x<c.maxX+r&&z>c.minZ-r&&z<c.maxZ+r);}
   move(dx,dz){
-    const b=this.world.bounds,p=this.player;
-    const nx=clamp(p.x+dx,b.minX+.4,b.maxX-.4),nz=clamp(p.z+dz,b.minZ+.4,b.maxZ-.4);
+    const b=this.world.bounds,p=this.player,pad=WALK.boundsPad;
+    const nx=clamp(p.x+dx,b.minX+pad,b.maxX-pad),nz=clamp(p.z+dz,b.minZ+pad,b.maxZ-pad);
     if(!this.blocked(nx,p.z))p.x=nx;if(!this.blocked(p.x,nz))p.z=nz;
   }
   step(dt,input){
